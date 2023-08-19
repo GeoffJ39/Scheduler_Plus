@@ -1,0 +1,5 @@
+activity name, duration, label, mandatory, occurances
+workout, 1, exercise, y
+project work, 1, work, y
+chill, 1, rec, n, 2
+leetcode, 1, work, y
