@@ -81,7 +81,7 @@ def main():
         
         #read from csv
         needs_scheduling = process_csv()
-        #function to schedule all events in csv
+        #function to schedule all events in csv 
         processed_events = process_events(needs_scheduling)
         if not events:
             print('No upcoming events found.')
@@ -93,7 +93,10 @@ def main():
             print(start, event['summary'])
 
         new_event = event_temp
-        new_event
+        next_day = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + datetime.timedelta(days=1)
+        new_event['start']['dateTime'] = str(next_day.isoformat())
+        print(new_event['start']['dateTime'])
+        new_event['end']['dateTime'] = str((next_day + datetime.timedelta(hours=1)).isoformat())
         event = service.events().insert(calendarId='primary', body=new_event).execute()
         print('Event created: %s' % (event.get('htmlLink')))
 
