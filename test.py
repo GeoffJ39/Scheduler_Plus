@@ -33,12 +33,67 @@ def process_events(schedule):
                 print(np.array([i]))
                 events_arr = np.append(events_arr,np.array([i]), axis=0)
     events_arr = events_arr[:, :4]
-    print(events_arr)
     return events_arr
 
-def schedule_events(events_array):
-    
-    pass
+def prio_order(events_arr):
+    print(events_arr)
+    work = []
+    other = []
+    new_events_arr = []
+    for i in events_arr:
+        if i[2] == ' work' and i[3] == ' y':
+            work += [i]
+        else: 
+            other += [i]
+    print(work)
+    print(other)
+    if len(work) >= len(other):
+        diff = len(work)-len(other)
+        new_events_arr = [work[0:diff]]
+        for j in range(diff,len(work)):
+            new_events_arr += [work[j]] + [other[j]]
+    else: 
+        diff = len(other)-len(work)
+        for j in range(0,len(work)):
+            new_events_arr += [work[j]] + [other[j]]
+        new_events_arr += other[len(work):]
+    print(new_events_arr)
+    print(len(new_events_arr))
+    for i in new_events_arr:
+        print(i)
+    return new_events_arr
+
+def schedule_events(events_array, service, todays_events):
+    next_day = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + datetime.timedelta(days=1)
+    start_time = next_day + datetime.timedelta(hours=config['starttime'])
+    event_cnt = 0
+    today_cnt = 0
+    while event_cnt != len(events_array):
+        if todays_events == [] or today_cnt == len(todays_events):
+            schedule_helper(event_cnt, events_array, start_time, service)
+            start_time = start_time + datetime.timedelta(hours=events_array[event_cnt][1])
+            event_cnt += 1
+        elif (start_time + datetime.timedelta(hours=events_array[event_cnt][1])).time() <= todays_events[today_cnt][0]:
+            schedule_helper(event_cnt, events_array, start_time, service)
+            start_time = start_time + datetime.timedelta(hours=events_array[event_cnt][1])
+            event_cnt += 1
+        else: 
+            start_time = start_time.replace(hour=todays_events[today_cnt][1].hour, minute=todays_events[today_cnt][1].minute)
+            today_cnt += 1
+
+def schedule_helper(event_cnt, events_array, start_time, service):
+    new_event = event_temp
+    new_event['summary'] = events_array[event_cnt][0]
+    new_event['start']['dateTime'] = str(start_time.isoformat())
+    new_event['end']['dateTime'] = str((start_time + datetime.timedelta(hours=events_array[event_cnt][1])).isoformat())
+    new_event['description'] = '@scheduler'
+    event = service.events().insert(calendarId='primary', body=new_event).execute()
+    service.events().update(calendarId='primary', eventId=event['id'], body={'description': '@scheduler'})
+    print('Event created: %s' % (event.get('htmlLink')))
+
+def clear_scheduler(to_del, service):
+    for i in to_del:
+        service.events().delete(calendarId='primary', eventId=i[0]).execute()
 
 def main():
     """Shows basic usage of the Google Calendar API.
@@ -49,7 +104,6 @@ def main():
     # created automatically when the authorization flow completes for the first
     # time.
     if os.path.exists('token.json'):
-        print('here')
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
     # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
@@ -72,35 +126,41 @@ def main():
         #     print(f"calendar ID: {calendar['id']}")
 
         # Call the Calendar API
-        now = datetime.datetime.utcnow().isoformat() + 'Z'  # 'Z' indicates UTC time
-        eod = (datetime.datetime.now().replace(hour=0,minute=0,second=0,microsecond=0) + datetime.timedelta(days=1)).isoformat() + 'Z'
-        print('Getting the upcoming 10 events')
+        now = (datetime.datetime.now().replace(hour=0,minute=0,second=0,microsecond=0) + datetime.timedelta(days=1)).isoformat() + 'Z'
+        eod = (datetime.datetime.now().replace(hour=0,minute=0,second=0,microsecond=0) + datetime.timedelta(days=2)).isoformat() + 'Z'
         events_result = service.events().list(calendarId='primary', timeMin=now,timeMax=eod,
                                               singleEvents=True, orderBy='startTime').execute()
         events = events_result.get('items', [])
         
         #read from csv
-        needs_scheduling = process_csv()
-        #function to schedule all events in csv 
-        processed_events = process_events(needs_scheduling)
+        
         if not events:
             print('No upcoming events found.')
             return
 
-        # Prints the start and name of the events in the day
+        # record all preexisting events in the day
+        todays_events = []
+        #find all event ids and creator ids to clear out any preexisting scheduler created events
+        to_del = []
         for event in events:
-            start = event['start'].get('dateTime', event['start'].get('date'))
-            print(start, event['summary'])
+            start = datetime.datetime.fromisoformat(event['start']['dateTime'])
+            end = datetime.datetime.fromisoformat(event['end']['dateTime'])
+            if 'description' in event and config['delete']:
+                to_del += [[event['id'], event['description']]]
+            else:
+                todays_events += [[start.time(), end.time()]]
+        if config['delete']:
+            clear_scheduler(to_del, service)
+        needs_scheduling = process_csv()
+        #function to preprocess events list to be scheduled
+        processed_events = process_events(needs_scheduling)
+        prio = prio_order(processed_events)
+        #function to schedule all events
+        #schedule_events(processed_events, service, todays_events)
 
-        new_event = event_temp
-        next_day = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + datetime.timedelta(days=1)
-        new_event['start']['dateTime'] = str(next_day.isoformat())
-        print(new_event['start']['dateTime'])
-        new_event['end']['dateTime'] = str((next_day + datetime.timedelta(hours=1)).isoformat())
-        event = service.events().insert(calendarId='primary', body=new_event).execute()
-        print('Event created: %s' % (event.get('htmlLink')))
 
     except HttpError as error:
+
         print('An error occurred: %s' % error)
 
 
@@ -109,6 +169,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-rb", "--rebalance", type=bool, default=False)
     parser.add_argument("-wt", "--work_type", default='balanced', const='balanced', nargs='?', choices=['balanced','grind','chill'])
+    parser.add_argument("-s", "--starttime", type=int, default=9)
+    parser.add_argument("-e", "--endtime", type=int, default=23)
+    parser.add_argument("-d", "--delete", type=bool, default=False)
     args = parser.parse_args()
     config = vars(args)
     print(config)

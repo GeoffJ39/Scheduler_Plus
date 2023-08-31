@@ -1,7 +1,8 @@
 event_temp = {
     'summary': 'placeholder',
     'location': None,
-    'description': None,
+    'description': '@scheduler',
+    'colorId': 6, 
     'creator': {
       'id': "scheduler",  
     },
