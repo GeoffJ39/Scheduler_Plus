@@ -69,11 +69,13 @@ def schedule_events(events_array, service, todays_events):
     event_cnt = 0
     today_cnt = 0
     while event_cnt != len(events_array):
-        if todays_events == [] or today_cnt == len(todays_events):
+        if start_time >= config['endtime']:
+            break
+        elif (todays_events == [] or today_cnt == len(todays_events)) and (start_time + datetime.timedelta(hours=events_array[event_cnt][1])).time() <= config['endtime']:
             schedule_helper(event_cnt, events_array, start_time, service)
             start_time = start_time + datetime.timedelta(hours=events_array[event_cnt][1])
             event_cnt += 1
-        elif (start_time + datetime.timedelta(hours=events_array[event_cnt][1])).time() <= todays_events[today_cnt][0]:
+        elif (start_time + datetime.timedelta(hours=events_array[event_cnt][1])).time() <= todays_events[today_cnt][0] and (start_time + datetime.timedelta(hours=events_array[event_cnt][1])).time() <= config['endtime']:
             schedule_helper(event_cnt, events_array, start_time, service)
             start_time = start_time + datetime.timedelta(hours=events_array[event_cnt][1])
             event_cnt += 1
